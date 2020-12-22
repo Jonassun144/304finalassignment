@@ -1,0 +1,281 @@
+---
+title: "Different thoughts on the result of 2019 Canadian Federal Election"
+author: "Zhongfan Sun 1004031193"
+date: "Due: Dec 22, 2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+Github: https://github.com/Jonassun144/304finalassignment 
+
+# keywords 
+Canadian election, prediction, MLR, CES, post stratification
+
+# Abstract
+In this paper, I used the CES dataset built a multilevel regression model and a logistic regression model for the 2019 Canadian Federal Election. Then used the gss data simulate a post-stratification to predict the result of the 2019 Canadian Federal Election. Although there was some error, I finally successfully predict the actual result of the 2019 Canadian Federal Election in the end.
+
+## Introduction
+I chose option B for my final assignment in assignment 3 our group successfully predict the result of the 2020 American Federal Election. Was that a coincidence or it was an accurate prediction? To find out, in this assignment, I will try to predict the result of the 2019 Canadian Federal Election and compare my result to the actual result of the 2019 Canadian Federal Election that everyone had voted for. This is important because, imagine if people can predict the result of the federal election, this will be a big step in the statistic field. To start with, the federal election is one of the most important events that happens to a country because, the decisions made by the government or the president will affect the future of the country in many ways and it of course will affect individuals as well in their daily life, therefore, everyone should vote.  Next, it is worth knowing that the Canadian federal election system works differently compared to the American Federal Election system. Canada has 338 ridings, each riding is an area and one riding also count as one seat in the House of Commons, so there are 338 seats in the House of Commons, and they are sitting by the Member of Parliament or MPs for short which are the representatives selected by the people from the riding. There are 5 political parties in Canada an MP can from any of those parties. During the Federal Election, people don’t vote for the people to run for Prime Minister directly, instead, they vote for the MP that in the same political party as the Prime Minister. If a party has the most seats in the House of Commons then they will win the election, and the leader of that party will become the Prime Minister. The party with the second place will become the opposition party or the Official Opposition.
+
+In this assignment, I will try to predict the 2019 Canadian Federal Election by using data from the CES. I will simulate 2 models and then compare them to see which one is better. For the first model, I will do simple logistic regression and then I will use multilevel regression to group up observations by age and sex. The data I will be using is from the CES and the gss census dataset for post-stratification. First, I cleaned the data by using the code from the problem set one then, I filtered the data with people who are certain that they will vote because in this way I can increase the certainty and accuracy of modeling and that leftover with people whose voting choice is Liberal party or Conservative party. All people from the Liberal party will vote for Justin Trudeau and people from the Conservative party will vote for Andrew Scheer. Furthermore, I narrow down gender for only men or women to match the values in the census dataset and simulate the multilevel regression model in R.
+
+
+```{r,results='hide',echo=FALSE,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(lme4)
+library(broom)
+
+
+# Loading in the cleaned survey Data
+survey_data <- read_csv("survey_data1.csv")
+filtered_data_census <- read_csv("gss_2017.csv")
+
+
+# Loading in the cleaned census Data
+filtered_data_survey <- survey_data %>% 
+  filter(cps19_v_likely == "Certain to vote" &(
+    vote_Justin == 1  | vote_Andrew == 1 )& (cps19_gender == "A woman" | cps19_gender == "A man"))
+
+
+filtered_data_survey<-na.omit(filtered_data_survey)
+
+unique(filtered_data_survey$cps19_votechoice)
+
+#change party to people#
+filtered_data_survey<-filtered_data_survey %>% 
+ mutate(cps19_votechoice = case_when(cps19_votechoice =="Liberal Party" ~ 'Justin Trudeau ',
+                        cps19_votechoice == "Conservative Party" ~ 'Andrew Scheer'))
+
+unique(filtered_data_survey$cps19_votechoice)
+
+####Map data style between survey & census####
+#####Create Age group in both datasets####
+
+
+filtered_data_survey <- filtered_data_survey %>% mutate(group_age = case_when(age <= 20 ~'20 or less',
+                                               age > 20 & age <= 35 ~ '21 to 35',
+                                               age > 35 & age <= 50 ~ '36 to 50',
+                                               age > 50 & age <= 65 ~ '51 to 65',
+                                               age > 65 ~ 'Above 65'))
+filtered_data_census <- filtered_data_census %>% mutate(group_age = case_when(age <= 20 ~'20 or less',
+                                               age > 20 & age <= 35 ~ '21 to 35',
+                                               age > 35 & age <= 50 ~ '36 to 50',
+                                               age > 50 & age <= 65 ~ '51 to 65',
+                                               age > 65 ~ 'Above 65'))
+
+unique(filtered_data_survey$group_age)
+
+#Map Sate/Stateicp#
+#survey#
+unique(filtered_data_survey$cps19_province)
+#census#
+unique(filtered_data_census$province)
+
+
+
+#education#
+unique(filtered_data_survey$cps19_education)
+
+collegeorhigher <- c("Some university","Bachelor's degree", "Some technical, community college, CEGEP, College Classique", "Completed technical, community college, CEGEP, College Classique", "Master's degree", "Professional degree or doctorate")
+highschool <- c("Completed secondary/ high school", "Some secondary/ high school")
+elementaryschoollower <- c("Some elementary school", "No schooling","Completed elementary school" )
+noanswer <- c("Don't know/ Prefer not to answer")
+
+
+#survey data
+filtered_data_survey<-filtered_data_survey %>% 
+ mutate(cps19_education = case_when(cps19_education =="Some university" ~ 'collegeorhigher',
+                        cps19_education =="Bachelor's degree" ~ 'collegeorhigher',
+                        cps19_education == "Some technical, community college, CEGEP, College Classique"~ 'collegeorhigher', 
+                        cps19_education == "Completed technical, community college, CEGEP, College Classique"~ 'collegeorhigher',
+                        cps19_education == "Master's degree"~ 'collegeorhigher',
+                        cps19_education == "Professional degree or doctorate"~ 'collegeorhigher',
+                        cps19_education == "Completed secondary/ high school"~ 'highschool',
+                        cps19_education == "Some secondary/ high school"~ 'highschool',
+                        cps19_education == "Some elementary school"~ 'elementaryschoollower',
+                        cps19_education == "Don't know/ Prefer not to answer"~ 'noanswer',
+                        cps19_education == "No schooling"~ 'elementaryschoollower',
+                        cps19_education == "Completed elementary school" ~ 'elementaryschoollower')) 
+
+
+#census data
+unique(filtered_data_census$education)
+
+filtered_data_census<-filtered_data_census %>% 
+  mutate(education = case_when(education=="Bachelor's degree (e.g. B.A., B.Sc., LL.B.)"~'collegeorhigher',
+                           education=="College, CEGEP or other non-university certificate or di..." ~'collegeorhigher',
+                           education== "University certificate or diploma below the bachelor's level"
+                           ~'collegeorhigher',
+                           education=="University certificate, diploma or degree above the bach..." ~'collegeorhigher',
+                           education=="High school diploma or a high school equivalency certificate"~'highschool',
+                           education=="Trade certificate or diploma"~'highschool',
+                           education=="Less than high school diploma or its equivalent" ~"elementaryschoollower",
+                           education== NA ~ 'noanswer')) 
+
+unique(filtered_data_census$education)
+
+#gender#
+unique(filtered_data_survey$cps19_gender)
+filtered_data_survey<-filtered_data_survey %>% 
+ mutate(cps19_gender = case_when(cps19_gender =="A woman" ~ 'Female',
+                        cps19_gender =="A man" ~ 'Male'))
+unique(filtered_data_survey$cps19_gender)
+
+
+
+#Populate Datset for modelling#
+survey_data <-filtered_data_survey%>% 
+  select(cps19_votechoice,age,group_age, cps19_gender,cps19_education,cps19_province)
+
+census_data <-
+filtered_data_census%>% select(age,group_age,sex,education,province,)
+rm(filtered_data_census,filtered_data_survey)
+
+#Create cell variable in both datasets#
+survey_data$cell<-paste(survey_data$cps19_gender,survey_data$group_age)
+census_data$cell<-paste(census_data$sex,census_data$group_age)
+
+
+#Convert variables to factors#
+#survey#
+f.cols.survey<-c("age","group_age","cps19_gender","cps19_education","cps19_province","cps19_votechoice","cell")
+survey_data[f.cols.survey] <- lapply(survey_data[f.cols.survey], factor) 
+#census#
+f.cols.census<-c("age", "group_age","sex","education","province", "cell")
+census_data[f.cols.census] <- lapply(census_data[f.cols.census], factor) 
+
+
+survey_data$cps19_votechoice <- relevel(survey_data$cps19_votechoice, ref = "Andrew Scheer")    
+```
+
+```{r,results='hide',echo=FALSE,message=FALSE,warning=FALSE}
+####*****Multi-level regression*****####
+library(lme4)
+library(ROCR)
+library(tidybayes)
+library(caret)
+library(pROC)
+library(tidyverse)
+library(survey)
+
+
+####Model 1####
+survey_model1 <- glm(cps19_votechoice ~ cps19_gender+cps19_education+group_age+cps19_province,
+                     data = survey_data,family="binomial")
+
+summary(survey_model1)
+model1_AIC <-AIC(survey_model1,k=2)
+model1_BIC <- BIC(survey_model1)
+model1_AICandBIC <- c(model1_AIC,model1_BIC)
+model1_AICandBIC
+
+p_modle1<-predict(survey_model1,type=c('response'))
+final_model1<-ifelse(p_modle1>=0.5,"Justin Trudeau","Andrew Scheer")
+result1<-cbind(survey_data,final_model1)
+
+#roc curve
+roc_modle1 <- roc(result1$cps19_votechoice, p_modle1)
+auc(roc_modle1)
+plot(roc_modle1, auc.polygon=TRUE, print.auc = TRUE,asp = NA)
+```
+
+
+```{r,results='hide',echo=FALSE,message=FALSE,warning=FALSE}
+
+model_log_2 <- glmer(cps19_votechoice~(1|cell)+cps19_education+cps19_province,
+                     data = survey_data, 
+                     family=binomial)
+
+summary(model_log_2)
+
+
+p_modle2<-predict(model_log_2,type=c('response'))
+
+final_model2<-ifelse(p_modle2>=0.5,"Justin Trudeau","Andrew Scheer")
+result2<-cbind(survey_data,final_model2)
+
+
+roc_modle2 <- roc(result2$cps19_votechoice, p_modle2)
+auc(roc_modle2)
+plot(roc_modle2, auc.polygon=TRUE, print.auc = TRUE,asp = NA)
+
+```
+\newpage
+# Methodology 
+
+In this analysis, we used logistic regression models to simulate the prediction of which candidate that each observation would vote for, specifically between Donald Trump and Joe Biden. Logistic regression should be applied when investigating the relationship between a binary dependent variable and other independent predictor variables. We have simulated two models, and by comparing both, we will select the model that could better represent the population. For model #1, we applied a simple logistic regression model and for model #2, we used multilevel regression to group observations by cells. 
+
+The reason for building two models is because I will compare these two models in the end by their AIC and AUC scores. With the low AIC score, the model will be more accurate. The AUC score is from 0 to 1 if the AUC is closer to 1 that means this model is more correct. From the code we can see that the AIC for model 1 is 19005 and AIC for model 2 is 19028 this means model 1 is more accurate. The AUC for model 1 is 0.686 and the AUC for model 2 is 0.685, so model 1, the logistic regression is better than model two because it is more accurate and more correct than model 2. Therefore, I will use model 1 to predict the 2019 Canadian Federal Election. 
+
+## Individual Level:
+$$ log(\frac{y_{i}}{1-y_{i}}) = \beta_{0i}+\beta_{gen}*x_{gen} + \beta_{pro}*x_{pro} + \beta_{gage}*x_{gage} + \epsilon$$
+In this model we look at each observation individually, the $y_{i}$ represents people in the $i^{th}$ group whose vote choice is the Liberal party, and they will vote for Justin Trudeau. Next, $\beta_{0}$ is the $i^{th}$ group that  intercept point $y_{i}$.
+Furthermore, $\beta_i$ also is the coefficients of the corresponding explanatory variable. So, if there is one unit increase in the variable there will be a $\beta_i$ increase in log-probability that will vote for the Liberal party or in other words Justin Trudeau. 
+
+
+## Level 2: Group Level:
+$$ \beta_{0i} = r_{00} + r_{0i}*W_j +u_{0i}$$
+In this model, I grouped up all observations by cells which means they will be group up by age and gender.  The $r_{0i}$ in the equation is the log-probability of $i^{th}$ group of observations that vote for the Liberal party. Next, r00 is a constant variable it is the intercept point with the dependent variable in this model. Finally, both $\epsilon$ and $u_{0j}$ is the expected error in each model, because they are both following a normal distribution that means their mean is 0. 
+
+\newpage
+## Post-Stratification 
+
+```{r,results='hide',echo=FALSE,message=FALSE,warning=FALSE}
+####*****Post-Stratification*****####
+names(census_data)[names(census_data) == "education"] <- "cps19_education"
+names(census_data)[names(census_data) == "sex"] <- "cps19_gender"
+names(census_data)[names(census_data) == "province"] <- "cps19_province"
+
+#using the census data to test#
+
+census_fianlresult <- survey_data %>% mutate(predictions= cps19_votechoice)
+
+
+#post based on gender and age group#
+groupby_age_gender <- census_fianlresult %>% count(cell,cps19_province, cps19_education)%>%
+  group_by(cell)
+
+groupby_age_gender$estimate <- predict(model_log_2,groupby_age_gender, type='response')
+groupby_age_gender <- groupby_age_gender %>% mutate(cell_p = n/length(census_data$cell))
+
+groupby_age_gender <- groupby_age_gender %>% mutate(alp_predict = estimate*cell_p)
+head(groupby_age_gender)
+
+
+sum(groupby_age_gender$alp_predict)
+```
+
+
+In this part, I did the post-stratification analysis to estimate the percentage of people who vote for Justin Trudeau and Andrew Scheer. I grouped up observations by groupage and sex then created another variable called cells. One example in cells could be females 20 to 35 or male 65 or over. To win this election Justin Trudeau should win the majority of seats in the House of Commons. I used the census dataset to predict the result, first I count the number of province and education observations within each cell group. Next, I use faction to predict and got the result of the 2019 Canadian Federal Election. However, keep in mind that the result of this prediction, is the proportion of the total number of seats that a political party has in the House of Commons and there are five political parties in Canada and the party that gets the most proportion of seats wins. 
+
+
+# Results
+
+
+
+
+
+## Result of the post-stratification prediction
+Finally, from the post-stratification analysis the yhat^ps is 0.363 this means the result of the 2019 Canadian Federal Election from my prediction is the Liberal Party has majority seats of 36.3 percent of seats which is 122 seats in the House of Commons. Therefore, the Liberal party leader Justin Trudeau will be the Canadian Prime Minister and win the election. According to Wikipedia, the actual result of the 2019 Canadian Federal Election is the Liberal party won 39.5 percent seats in the House of Commons which is 184 seats and the Conservative party won 99 seats. Although there expects some error from my prediction, the Liberal party still has the majority of seats in the house of commons. Therefore, this model successfully predicts the actual result of the 2019 Canadian Federal Election.
+
+# Discussion
+
+In this assignment, I simulated two models, one logistic regression model, and one multilevel regression model, by comparing the AIC and AUC values of those two models shows that the first model is more accurate with a lower AIC score, and higher correctness with an AUC score that closer to one. Then I use post-stratification to simulate the voting and made a prediction. Finally, I got the yhat^ps equal to 0.363 which means the Liberal party has the most seats in the House of Commons and wins the 2019 Canadian Federal Election. 
+
+
+  However, there is a weakness of this model when I comparing to the actual result of the 2019 Canadian Federal Election there are some errors that need to be considered. One of the reason can be I removed three other parties from the beginning to simulate the logistic regression model, this is not good because we should count all of the parties, maybe people from other party but still vote for Justin Trudeau or Andrew Scheer then I will be losing count of those people. Furthermore, by applying the logistic regression model after I only can get one yhat^ps value and five parties are running for the Federal Election so I could not calculate the number of seats that each party has in the House of Commons. 
+
+\newpage
+
+# References
+
+1.    Canadian federal election. (2020). Retrieved 22 December 2020, from     
+      https://en.wikipedia.org/wiki/2019_Canadian_federal_election 
+
+2.   Stephenson, Laura B., Allison Harell, Daniel Rubenson and Peter John Loewen. The 2019 Canadian Election Study – Online Collection.      [dataset]
+     http://www.ces-eec.ca/
+3.   SDA. (2017). General social survey on Family (cycle 31). Retrieved from  
+     https://sda-artsci-utoronto-ca.myaccess.library.utoronto.ca/sdaweb/html/gss.htm
+
+
